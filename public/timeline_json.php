@@ -2,12 +2,17 @@
 $dbh = new PDO('mysql:host=mysql;dbname=example_db', 'root', '');
 
 session_start();
-if (empty($_SESSION['login_user_id'])) { // 非ログインの場合利用不可 401 で空のものを返す
+if (empty($_SESSION['login_user_id'])) { // 非ログインの場合利用不可
   header("HTTP/1.1 401 Unauthorized");
   header("Content-Type: application/json");
   print(json_encode(['entries' => []]));
   return;
 }
+
+// --- 無限スクロール用のパラメータ取得 ---
+$limit = 10;
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 0;
+$offset = $page * $limit;
 
 // 現在のログイン情報を取得する
 $user_select_sth = $dbh->prepare("SELECT * from users WHERE id = :id");
@@ -22,18 +27,23 @@ $sql = 'SELECT bbs_entries.*, users.name AS user_name, users.icon_filename AS us
   . '   bbs_entries.user_id IN'
   . '     (SELECT followee_user_id FROM user_relationships WHERE follower_user_id = :login_user_id)'
   . '   OR bbs_entries.user_id = :login_user_id'
-  . ' ORDER BY bbs_entries.created_at DESC';
+  . ' ORDER BY bbs_entries.created_at DESC'
+  . ' LIMIT :limit OFFSET :offset'; // LIMIT句を追加
+
 $select_sth = $dbh->prepare($sql);
-$select_sth->execute([
-  ':login_user_id' => $_SESSION['login_user_id'],
-]);
+
+// 数値として安全にバインドする
+$select_sth->bindValue(':login_user_id', $_SESSION['login_user_id'], PDO::PARAM_INT);
+$select_sth->bindValue(':limit', $limit, PDO::PARAM_INT);
+$select_sth->bindValue(':offset', $offset, PDO::PARAM_INT);
+
+$select_sth->execute();
 
 // bodyのHTMLを出力するための関数を用意する
 function bodyFilter (string $body): string
 {
   $body = htmlspecialchars($body); // エスケープ処理
   $body = nl2br($body); // 改行文字を<br>要素に変換
-
   return $body;
 }
 
