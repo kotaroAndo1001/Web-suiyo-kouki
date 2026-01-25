@@ -1,0 +1,61 @@
+# 後期最終課題
+
+## 必要環境
+- Amazon Linux 2(EC2など)
+- Docker
+- Docker Compose
+- Git
+- MySQL
+
+## インストール方法(環境準備)
+
+### Docker インストール　＆　自動起動化
+```bash
+sudo yum install -y docker
+sudo systemctl start dockers
+sudo systemctl enable docker
+sudo usermod -a -G docker ec2-user
+
+```
+
+## Docker Compose インストール
+```bash
+sudo mkdir -p /usr/local/lib/docker/cli-plugins/
+sudo curl -SL https://github.com/docker/compose/releases/download/v2.36.0/docker-compose-$(uname -s)-$(uname -m) \
+ -o /usr/local/lib/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+```
+
+### Git インストール
+```bash
+sudo yum install -y git
+```
+
+### セットアップ手順
+1. リポジトリを取得
+```bash
+git clone https://github.com/<ユーザー名>/<リポジトリ名>.git
+cd <リポジトリ名>
+
+2. コンテナをビルド・起動
+```bash
+docker compose build
+docker compose up -d
+```
+
+3. MySQL にテーブルを作成・MySQL コンテナに入って kadai_db を選択してログイン
+```bash
+docker compose exec mysql mysql kadai_db
+```
+
+```sql
+CREATE DATABASE kadai_db;
+USE kadai_db;
+CREATE TABLE bbs_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  body TEXT NOT NULL,
+  image_filename VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
