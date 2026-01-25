@@ -38,6 +38,8 @@ sudo yum install -y git
 git clone https://github.com/<ユーザー名>/<リポジトリ名>.git
 cd <リポジトリ名>
 
+```
+
 2. コンテナをビルド・起動
 ```bash
 docker compose build
