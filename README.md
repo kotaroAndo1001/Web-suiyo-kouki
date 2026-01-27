@@ -68,7 +68,10 @@ CREATE TABLE `bbs_entries` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `user_id` INT UNSIGNED NOT NULL,
   `body` TEXT NOT NULL,
-  `image_filename` TEXT DEFAULT NULL,
+  `image_filename` TEXT DEFAULT NULL, 
+  `image_filename2` TEXT DEFAULT NULL,
+  `image_filename3` TEXT DEFAULT NULL, 
+  `image_filename4` TEXT DEFAULT NULL, 
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
