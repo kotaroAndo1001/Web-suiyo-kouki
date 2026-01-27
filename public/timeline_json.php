@@ -24,14 +24,13 @@ $sql = 'SELECT bbs_entries.*, users.name AS user_name, users.icon_filename AS us
   . ' FROM bbs_entries'
   . ' INNER JOIN users ON bbs_entries.user_id = users.id'
   . ' WHERE'
-  . '   bbs_entries.user_id IN'
-  . '     (SELECT followee_user_id FROM user_relationships WHERE follower_user_id = :login_user_id)'
-  . '   OR bbs_entries.user_id = :login_user_id'
+  . '    bbs_entries.user_id IN'
+  . '      (SELECT followee_user_id FROM user_relationships WHERE follower_user_id = :login_user_id)'
+  . '    OR bbs_entries.user_id = :login_user_id'
   . ' ORDER BY bbs_entries.created_at DESC'
-  . ' LIMIT :limit OFFSET :offset'; // LIMIT句を追加
+  . ' LIMIT :limit OFFSET :offset'; 
 
 $select_sth = $dbh->prepare($sql);
-// 数値としてバインド
 $select_sth->bindValue(':login_user_id', $_SESSION['login_user_id'], PDO::PARAM_INT);
 $select_sth->bindValue(':limit', $limit, PDO::PARAM_INT);
 $select_sth->bindValue(':offset', $offset, PDO::PARAM_INT);
@@ -60,9 +59,9 @@ foreach ($select_sth as $entry) {
             empty($entry['image_filename2']) ? '' : ('/image/' . $entry['image_filename2']),
             empty($entry['image_filename3']) ? '' : ('/image/' . $entry['image_filename3']),
             empty($entry['image_filename4']) ? '' : ('/image/' . $entry['image_filename4']),
-        ], // ← ここで image_file_url の配列を閉じます
+        ],
         'created_at' => $entry['created_at'],
-    ]; // ← ここで $result_entry の配列を閉じます
+    ];
     $result_entries[] = $result_entry;
 }
 
