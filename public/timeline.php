@@ -1,160 +1,110 @@
 <?php
 $dbh = new PDO('mysql:host=mysql;dbname=example_db', 'root', '');
-
 session_start();
-if (empty($_SESSION['login_user_id'])) { // 非ログインの場合利用不可
-  header("HTTP/1.1 302 Found");
-  header("Location: /login.php");
+if (empty($_SESSION['login_user_id'])) {
+  header("Location: ./login.php");
   return;
 }
 
-// 現在のログイン情報を取得する
-$user_select_sth = $dbh->prepare("SELECT * from users WHERE id = :id");
-$user_select_sth->execute([':id' => $_SESSION['login_user_id']]);
-$user = $user_select_sth->fetch();
-
 // 投稿処理
 if (isset($_POST['body']) && !empty($_SESSION['login_user_id'])) {
+  $image_filenames = [null, null, null, null];
 
-  $image_filename = null;
-  if (!empty($_POST['image_base64'])) {
-    // 先頭の data:~base64, のところは削る
-    $base64 = preg_replace('/^data:.+base64,/', '', $_POST['image_base64']);
-
-    // base64からバイナリにデコードする
-    $image_binary = base64_decode($base64);
-
-    // 新しいファイル名を決めてバイナリを出力する
-    $image_filename = strval(time()) . bin2hex(random_bytes(25)) . '.png';
-    $filepath =  '/var/www/upload/image/' . $image_filename;
-    file_put_contents($filepath, $image_binary);
+  for ($i = 0; $i < 4; $i++) {
+    $key = 'image_base64_' . $i;
+    if (!empty($_POST[$key])) {
+      $base64 = preg_replace('/^data:.+base64,/', '', $_POST[$key]);
+      $binary = base64_decode($base64);
+      $name = time() . bin2hex(random_bytes(10)) . "_{$i}.png";
+      file_put_contents('/var/www/upload/image/' . $name, $binary);
+      $image_filenames[$i] = $name;
+    }
   }
 
-  // insertする
-  $insert_sth = $dbh->prepare("INSERT INTO bbs_entries (user_id, body, image_filename) VALUES (:user_id, :body, :image_filename)");
-  $insert_sth->execute([
-    ':user_id' => $_SESSION['login_user_id'], // ログインしている会員情報の主キー
-    ':body' => $_POST['body'], // フォームから送られてきた投稿本文
-    ':image_filename' => $image_filename, // 保存した画像の名前 (nullの場合もある)
-  ]);
-
-  // 処理が終わったらリダイレクトする
-  header("HTTP/1.1 303 See Other");
+  $insert = $dbh->prepare("INSERT INTO bbs_entries (user_id, body, image_filename, image_filename2, image_filename3, image_filename4) VALUES (?, ?, ?, ?, ?, ?)");
+  $insert->execute([$_SESSION['login_user_id'], $_POST['body'], $image_filenames[0], $image_filenames[1], $image_filenames[2], $image_filenames[3]]);
   header("Location: ./timeline.php");
   return;
 }
 ?>
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>タイムライン</title></head>
+<body>
+  <form method="POST" action="./timeline.php">
+    <textarea name="body" required></textarea><br>
+    <input type="file" id="imageInput" multiple accept="image/*"><br>
+    <div id="hiddenInputs"></div>
+    <button type="submit">投稿</button>
+  </form>
+  <hr>
+  <div id="entriesRenderArea"></div>
+  <div id="loadMarker" style="text-align:center;">読み込み中...</div>
 
-<div>
-  現在 <?= htmlspecialchars($user['name']) ?> (ID: <?= $user['id'] ?>) さんでログイン中
-</div>
-<div style="margin-bottom: 1em;">
-  <a href="/setting/index.php">設定画面</a> / <a href="/users.php">会員一覧画面</a>
-</div>
-
-<form method="POST" action="./timeline.php">
-  <textarea name="body" required style="width:100%; height:5em;"></textarea>
-  <div style="margin: 1em 0;">
-    <input type="file" accept="image/*" id="imageInput">
-  </div>
-  <input id="imageBase64Input" type="hidden" name="image_base64">
-  <canvas id="imageCanvas" style="display: none;"></canvas>
-  <button type="submit">送信</button>
-</form>
-<hr>
-
-<div id="entriesRenderArea"></div>
-<div id="loadMarker" style="text-align:center; padding: 20px;">読み込み中...</div>
-
-<dl id="entryTemplate" style="display: none; margin-bottom: 1em; padding-bottom: 1em; border-bottom: 1px solid #ccc;">
-  <dt>番号</dt>
-  <dd data-role="entryIdArea"></dd>
-  <dt>投稿者</dt>
-  <dd>
-    <a href="" data-role="entryUserAnchor">
-      <img data-role="entryUserIconImage" style="height: 2em; width: 2em; border-radius: 50%; object-fit: cover;">
-      <span data-role="entryUserNameArea"></span>
-    </a>
-  </dd>
-  <dt>日時</dt>
-  <dd data-role="entryCreatedAtArea"></dd>
-  <dt>内容</dt>
-  <dd data-role="entryBodyArea"></dd>
-</dl>
+  <template id="entryTemplate">
+    <div style="border-bottom:1px solid #ccc; padding:10px;">
+      <strong class="user-name"></strong>
+      <p class="entry-body"></p>
+      <div class="entry-images"></div> </div>
+  </template>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-  const entryTemplate = document.getElementById('entryTemplate');
-  const entriesRenderArea = document.getElementById('entriesRenderArea');
-  let page = 0; // 読み込みページ管理
-  let isFull = false; // 全件読み込みフラグ
+let page = 0;
+const imageInput = document.getElementById('imageInput');
 
-  // タイムライン取得関数
-  const fetchTimeline = () => {
-    if (isFull) return;
-    const request = new XMLHttpRequest();
-    request.onload = (event) => {
-      const response = event.target.response;
-      if (!response.entries || response.entries.length === 0) {
-        isFull = true;
-        document.getElementById('loadMarker').innerText = "全ての投稿を表示しました";
-        return;
-      }
-      response.entries.forEach((entry) => {
-        const entryCopied = entryTemplate.cloneNode(true);
-        entryCopied.style.display = 'block';
-        entryCopied.querySelector('[data-role="entryIdArea"]').innerText = entry.id;
-        entryCopied.querySelector('[data-role="entryUserNameArea"]').innerText = entry.user_name;
-        entryCopied.querySelector('[data-role="entryUserAnchor"]').href = entry.user_profile_url;
-        entryCopied.querySelector('[data-role="entryCreatedAtArea"]').innerText = entry.created_at;
-        entryCopied.querySelector('[data-role="entryBodyArea"]').innerHTML = entry.body;
+// 画像4枚のリサイズとセット
+imageInput.onchange = async (e) => {
+  const files = Array.from(e.target.files).slice(0, 4);
+  const container = document.getElementById('hiddenInputs');
+  container.innerHTML = '';
+  for (let i = 0; i < files.length; i++) {
+    const base64 = await resize(files[i]);
+    container.innerHTML += `<input type="hidden" name="image_base64_${i}" value="${base64}">`;
+  }
+};
 
-        if (entry.user_icon_file_url) {
-          entryCopied.querySelector('[data-role="entryUserIconImage"]').src = entry.user_icon_file_url;
-        }
-        if (entry.image_file_url) {
-          const img = new Image();
-          img.src = entry.image_file_url;
-          img.style.cssText = "display:block; margin-top:1em; max-height:300px; max-width:300px;";
-          entryCopied.querySelector('[data-role="entryBodyArea"]').appendChild(img);
-        }
-        entriesRenderArea.appendChild(entryCopied);
-      });
-      page++;
-    };
-    request.open('GET', `/timeline_json.php?page=${page}`, true);
-    request.responseType = 'json';
-    request.send();
-  };
-
-  // スクロール監視設定
-  const observer = new IntersectionObserver((entries) => {
-    if (entries[0].isIntersecting) fetchTimeline();
-  });
-  observer.observe(document.getElementById('loadMarker'));
-
-  // 画像縮小処理 (Canvas API使用)
-  const imageInput = document.getElementById("imageInput");
-  imageInput.addEventListener("change", () => {
-    if (imageInput.files.length < 1) return;
-    const reader = new FileReader();
-    reader.onload = () => {
+async function resize(file) {
+  return new Promise(res => {
+    const r = new FileReader();
+    r.onload = e => {
       const img = new Image();
       img.onload = () => {
-        const canvas = document.getElementById("imageCanvas");
-        const maxLength = 1000;
-        let w = img.naturalWidth, h = img.naturalHeight;
-        if (w > maxLength || h > maxLength) {
-          if (w > h) { h = maxLength * h / w; w = maxLength; }
-          else { w = maxLength * w / h; h = maxLength; }
-        }
-        canvas.width = w; canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        document.getElementById("imageBase64Input").value = canvas.toDataURL();
+        const c = document.createElement('canvas');
+        c.width = 500; c.height = 500 * (img.height / img.width);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        res(c.toDataURL('image/png'));
       };
-      img.src = reader.result;
+      img.src = e.target.result;
     };
-    reader.readAsDataURL(imageInput.files[0]);
+    r.readAsDataURL(file);
   });
-});
+}
+
+// 無限スクロールと4枚表示
+const fetchTimeline = () => {
+  fetch(`./timeline_json.php?page=${page}`).then(r => r.json()).then(data => {
+    if (data.entries.length === 0) return;
+    data.entries.forEach(entry => {
+      const clone = document.getElementById('entryTemplate').content.cloneNode(true);
+      clone.querySelector('.user-name').innerText = entry.user_name;
+      clone.querySelector('.entry-body').innerText = entry.body;
+      
+      
+      const imgBox = clone.querySelector('.entry-images');
+      entry.image_file_url.forEach(url => {
+        if (!url) return;
+        const img = document.createElement('img');
+        img.src = url; img.style.width = '100px';
+        imgBox.appendChild(img);
+      });
+      // ------------------------------
+      document.getElementById('entriesRenderArea').appendChild(clone);
+    });
+    page++;
+  });
+};
+
+new IntersectionObserver(e => { if(e[0].isIntersecting) fetchTimeline(); }).observe(document.getElementById('loadMarker'));
 </script>
+</body>
+</html>

@@ -49,16 +49,21 @@ function bodyFilter (string $body): string
 // JSONに吐き出す用のentries
 $result_entries = [];
 foreach ($select_sth as $entry) {
-  $result_entry = [
-    'id' => $entry['id'],
-    'user_name' => $entry['user_name'],
-    'user_profile_url' => '/profile.php?user_id=' . $entry['user_id'],
-    'user_icon_file_url' => empty($entry['user_icon_filename']) ? '' : ('/image/' . $entry['user_icon_filename']),
-    'body' => bodyFilter($entry['body']),
-    'image_file_url' => empty($entry['image_filename']) ? '' : ('/image/' . $entry['image_filename']),
-    'created_at' => $entry['created_at'],
-  ];
-  $result_entries[] = $result_entry;
+    $result_entry = [
+        'id' => $entry['id'],
+        'user_name' => $entry['user_name'],
+        'user_profile_url' => '/profile.php?user_id=' . $entry['user_id'],
+        'user_icon_file_url' => empty($entry['user_icon_filename']) ? '' : ('/image/' . $entry['user_icon_filename']),
+        'body' => bodyFilter($entry['body']),
+        'image_file_url' => [
+            empty($entry['image_filename']) ? '' : ('/image/' . $entry['image_filename']),
+            empty($entry['image_filename2']) ? '' : ('/image/' . $entry['image_filename2']),
+            empty($entry['image_filename3']) ? '' : ('/image/' . $entry['image_filename3']),
+            empty($entry['image_filename4']) ? '' : ('/image/' . $entry['image_filename4']),
+        ], // ← ここで image_file_url の配列を閉じます
+        'created_at' => $entry['created_at'],
+    ]; // ← ここで $result_entry の配列を閉じます
+    $result_entries[] = $result_entry;
 }
 
 header("HTTP/1.1 200 OK");
