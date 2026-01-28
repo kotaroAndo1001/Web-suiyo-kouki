@@ -16,7 +16,6 @@ $user = $user_select_sth->fetch();
 // 投稿処理
 if (isset($_POST['body']) && !empty($_SESSION['login_user_id'])) {
 
-  // --- 複数枚対応のため配列で管理 ---
   $image_filenames = [null, null, null, null];
   for ($i = 0; $i < 4; $i++) {
     $key = 'image_base64_' . $i;
